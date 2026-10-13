@@ -1,0 +1,20 @@
+# ===== 敏感数据(严禁上传)=====
+# 登录会话 Cookie(个人登录凭证)
+session_cookies.json
+# 调试脚本与抓包数据(含个人账号信息)
+agent-tools/
+
+# ===== Python =====
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ===== 发布包(每次可重新生成)=====
+dist/
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

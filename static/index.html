@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEU 素质讲座抢座助手</title>
+<style>
+  :root {
+    --bg: #0f1419; --card: #1a2129; --border: #2a3441;
+    --text: #e6edf3; --muted: #8b98a5; --accent: #4f8ef7;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 14px; padding: 20px; max-width: 1100px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  h1 .tag { font-size: 11px; background: #21262d; border: 1px solid var(--border);
+    color: var(--muted); padding: 2px 8px; border-radius: 10px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin-bottom: 12px; color: #c9d6e3; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  button {
+    background: #21262d; color: var(--text); border: 1px solid var(--border);
+    padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button.danger { background: #da3633; border-color: #da3633; color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input[type=text], input[type=datetime-local] {
+    background: #0d1117; border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 6px; font-size: 13px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+  tr.sel-row { background: #16232f; }
+  tr:hover { background: #1c2430; cursor: pointer; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .dot.g { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.y { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .dot.r { background: var(--err); box-shadow: 0 0 6px var(--err); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--border); }
+  .badge.g { color: var(--ok); border-color: rgba(63,185,80,.4); }
+  .badge.y { color: var(--warn); border-color: rgba(210,153,34,.4); }
+  .badge.r { color: var(--err); border-color: rgba(248,81,73,.4); }
+  .badge.b { color: var(--accent); border-color: rgba(79,142,247,.4); }
+  pre#log {
+    background: #0d1117; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; font-size: 12px; line-height: 1.7; max-height: 260px;
+    overflow-y: auto; white-space: pre-wrap; font-family: Consolas, monospace;
+  }
+  .captcha-box { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+  .captcha-box img { height: 44px; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+  .result-ok { color: var(--ok); font-weight: 700; font-size: 16px; }
+  .result-err { color: var(--err); font-weight: 700; font-size: 16px; }
+  label { color: var(--muted); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .mt8 { margin-top: 8px; }
+  .flexgap { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+
+<h1>🎓 SEU 素质讲座抢座助手 <span class="tag">本地运行 · Cookie 鉴权 · 定时抢座</span></h1>
+
+<!-- 登录 -->
+<div class="card">
+  <h2>① 登录</h2>
+  <div class="row" style="margin-bottom:10px">
+    <input type="text" id="loginUser" placeholder="一卡通号 / 学工号" size="14" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="密码" size="16" autocomplete="current-password">
+    <button class="primary" id="btnLoginDirect">登录</button>
+    <span class="muted">或</span>
+    <button id="btnLogin">浏览器登录(备用)</button>
+    <span class="muted" id="timeInfo"></span>
+  </div>
+  <div class="row">
+    <span><span class="dot r" id="loginDot"></span><span id="loginText">未登录</span></span>
+  </div>
+  <div class="mt8 muted" id="loginHint">输入统一认证账号密码直接登录(密码仅在内存中加密使用,不会保存)。</div>
+</div>
+
+<!-- 讲座列表 -->
+<div class="card">
+  <h2>② 讲座列表
+    <span style="float:right" class="flexgap">
+      <label><input type="checkbox" id="autoRefresh"> 自动刷新(2s)</label>
+      <button id="btnRefresh">刷新列表</button>
+    </span>
+  </h2>
+  <table id="lecTable">
+    <thead><tr>
+      <th></th><th>名称</th><th>类别</th><th>主讲</th><th>讲座时间</th>
+      <th>地点</th><th>容量</th><th>预约开放</th><th>状态</th>
+    </tr></thead>
+    <tbody id="lecBody"><tr><td colspan="9" class="muted">登录后刷新列表</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 抢座配置 + 任务 -->
+<div class="grid2">
+  <div class="card">
+    <h2>③ 抢座配置</h2>
+    <div id="cfgArea" class="muted">先在上方表格选择一场讲座</div>
+    <div id="cfgForm" style="display:none">
+      <div class="row" style="margin-bottom:10px">
+        <span id="cfgTitle" style="font-weight:600"></span>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <label>开始时间(本机时钟)</label>
+        <input type="datetime-local" id="startAt" step="1" style="color-scheme:dark">
+        <label>提前(s)</label>
+        <input type="text" id="lead" value="0.5" size="4">
+        <label>最大尝试</label>
+        <input type="text" id="maxAtt" value="100" size="4">
+      </div>
+      <div class="mt8 muted" style="margin-bottom:10px">开始时间按<b>本机时钟</b>到点触发;选中讲座时自动填入服务器开放时刻换算后的本机时间。</div>
+      <div class="row" style="margin-bottom:10px">
+        <label>验证码模式:</label>
+        <label><input type="radio" name="mode" value="auto" checked> 自动OCR</label>
+        <label><input type="radio" name="mode" value="manual"> 手动输入</label>
+        <label><input type="checkbox" id="fullRetry"> 已满仍重试</label>
+      </div>
+      <div class="row">
+        <button class="primary" id="btnStart">🚀 启动抢座</button>
+        <button class="danger" id="btnStop">停止</button>
+        <button id="btnTest">测试流程(不提交)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>④ 任务状态</h2>
+    <div class="row" style="margin-bottom:8px">
+      <span>状态: <b id="taskState">无任务</b></span>
+      <span>尝试次数: <b id="taskAtt">0</b></span>
+    </div>
+    <div id="captchaArea" style="display:none" class="captcha-box">
+      <img id="captchaImg" alt="验证码">
+      <input type="text" id="captchaInput" placeholder="输入4位验证码" maxlength="8" size="10">
+      <button class="primary" id="btnSubmitCap">提交验证码</button>
+    </div>
+    <div id="taskResult" class="mt8"></div>
+    <pre id="log">等待任务…</pre>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let selectedWid = null;
+let lectures = [];
+
+// ---------- 登录 ----------
+$('btnLoginDirect').onclick = async () => {
+  const u = $('loginUser').value.trim();
+  const p = $('loginPass').value;
+  if (!u || !p) return alert('请输入账号和密码');
+  $('btnLoginDirect').disabled = true;
+  $('btnLoginDirect').textContent = '登录中…';
+  try {
+    const r = await fetch('/api/login/direct', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: u, password: p}),
+    });
+    const d = await r.json();
+    if (!d.ok) alert(d.msg);
+    else $('loginPass').value = '';
+  } catch (e) { alert('请求失败: ' + e); }
+  $('btnLoginDirect').disabled = false;
+  $('btnLoginDirect').textContent = '登录';
+};
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLoginDirect').click(); });
+
+$('btnLogin').onclick = async () => {
+  const r = await fetch('/api/login/start', {method: 'POST'});
+  const d = await r.json();
+  if (!d.ok) alert(d.msg);
+};
+
+async function pollLogin() {
+  const d = await (await fetch('/api/login/status')).json();
+  const dot = $('loginDot'), t = $('loginText');
+  if (d.login === 'logged_in') {
+    dot.className = 'dot g'; t.textContent = `已登录(Cookie x${d.cookie_count})`;
+    $('loginHint').textContent = '登录有效。若接口报错/会话过期,请重新登录。';
+    if (!$('timeInfo').textContent) syncTime();
+  } else if (d.login === 'processing') {
+    dot.className = 'dot y'; t.textContent = '登录中…';
+    $('loginHint').textContent = d.msg;
+  } else if (d.login === 'failed') {
+    dot.className = 'dot r'; t.textContent = '登录失败';
+    $('loginHint').textContent = d.msg;
+  } else {
+    dot.className = 'dot r'; t.textContent = '未登录';
+  }
+}
+
+async function syncTime() {
+  if ($('loginDot').className.indexOf('g') < 0) return; // 未登录不校准
+  const d = await (await fetch('/api/time')).json();
+  if (d.ok) {
+    window.__srvOffset = d.offset;  // 服务器 - 本机(秒),用于把服务器开放时刻换算成本机时间
+    $('timeInfo').textContent = `服务器时间差 ${d.offset >= 0 ? '+' : ''}${d.offset}s(开放时刻已自动换算为本机时间)`;
+  }
+}
+
+// ---------- 讲座列表 ----------
+function fmt(s) { return (s || '').slice(0, 16); }
+
+function lecStatus(it) {
+  const now = Date.now();
+  const open = it.book_open ? new Date(it.book_open.replace(/-/g, '/')).getTime() : 0;
+  const end = it.book_end ? new Date(it.book_end.replace(/-/g, '/')).getTime() : 0;
+  if (it.fbzt === '-1') return {cls: 'r', text: '活动取消'};
+  if (open && now < open) return {cls: 'y', text: '未开放'};
+  if (end && now > end) return {cls: 'r', text: '已结束'};
+  if (it.booked >= it.total) return {cls: 'r', text: '已满'};
+  return {cls: 'g', text: '可预约'};
+}
+
+async function refreshLectures() {
+  const d = await (await fetch('/api/lectures')).json();
+  if (!d.ok) { if (!$('lecBody').dataset.err) { $('lecBody').innerHTML = `<tr><td colspan="9" class="muted">${d.msg}</td></tr>`; $('lecBody').dataset.err = 1; } return; }
+  delete $('lecBody').dataset.err;
+  lectures = d.items;
+  const tb = $('lecBody');
+  if (!lectures.length) { tb.innerHTML = '<tr><td colspan="9" class="muted">暂无可预约讲座</td></tr>'; return; }
+  tb.innerHTML = lectures.map(it => {
+    const st = lecStatus(it);
+    const cd = st.cls === 'y' && it.book_open
+      ? ` <span class="muted">${cdText(it.book_open)}</span>` : '';
+    return `<tr class="${it.wid === selectedWid ? 'sel-row' : ''}" data-wid="${it.wid}">
+      <td><input type="radio" name="sel" ${it.wid === selectedWid ? 'checked' : ''}></td>
+      <td title="${it.title}">${it.title.length > 28 ? it.title.slice(0, 28) + '…' : it.title}</td>
+      <td class="muted">${it.category || ''}</td>
+      <td>${it.speaker || ''}</td>
+      <td>${fmt(it.start_time)}</td>
+      <td>${it.place || ''}</td>
+      <td>${it.booked}/${it.total}</td>
+      <td>${fmt(it.book_open)}</td>
+      <td><span class="badge ${st.cls}">${st.text}</span>${cd}</td>
+    </tr>`;
+  }).join('');
+  [...tb.querySelectorAll('tr')].forEach(tr => tr.onclick = () => selectWid(tr.dataset.wid));
+}
+
+function cdText(open) {
+  const ms = new Date(open.replace(/-/g, '/')).getTime() - Date.now();
+  if (ms <= 0) return '即将开放';
+  const s = Math.ceil(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  return `剩 ${h ? h + '时' : ''}${m}分${ss}秒`;
+}
+
+function selectWid(wid) {
+  selectedWid = wid;
+  const it = lectures.find(x => x.wid === wid);
+  if (!it) return;
+  $('cfgArea').style.display = 'none';
+  $('cfgForm').style.display = 'block';
+  $('cfgTitle').textContent = `🎯 ${it.title} (${it.booked}/${it.total})`;
+  if ($('startAt').dataset.touched !== '1' && it.book_open) {
+    // 服务器开放时刻 → 减去时钟差 → 本机时刻(输入框对照的就是本机钟)
+    const off = (typeof window.__srvOffset === 'number') ? window.__srvOffset : 0;
+    const t = new Date(new Date(it.book_open.replace(/-/g, '/')).getTime() - off * 1000);
+    const p = n => String(n).padStart(2, '0');
+    $('startAt').value = `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}T${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())}`;
+  }
+  [...document.querySelectorAll('#lecBody tr')].forEach(tr =>
+    tr.classList.toggle('sel-row', tr.dataset.wid === wid));
+}
+$('startAt').oninput = () => $('startAt').dataset.touched = '1';
+
+$('btnRefresh').onclick = refreshLectures;
+$('autoRefresh').onchange = () => {};
+
+// ---------- 抢座任务 ----------
+$('btnStart').onclick = async () => {
+  if (!selectedWid) return alert('请先选择讲座');
+  const it = lectures.find(x => x.wid === selectedWid);
+  let startAt = $('startAt').value;  // yyyy-MM-ddTHH:mm(:ss)
+  if (startAt) startAt = startAt.replace('T', ' ');
+  const body = {
+    wid: selectedWid,
+    title: it ? it.title : selectedWid,
+    mode: document.querySelector('input[name=mode]:checked').value,
+    start_at: startAt,
+    lead_seconds: parseFloat($('lead').value) || 0,
+    max_attempts: parseInt($('maxAtt').value) || 100,
+    full_retry: $('fullRetry').checked,
+  };
+  const r = await fetch('/api/task/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  if (!d.ok) alert(d.msg);
+};
+
+$('btnStop').onclick = () => fetch('/api/task/stop', {method: 'POST'});
+
+$('btnTest').onclick = async () => {
+  if (!selectedWid) return alert('请先选择讲座');
+  const r = await fetch('/api/test', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({wid: selectedWid}),
+  });
+  const d = await r.json();
+  if (!d.ok) return alert('测试失败: ' + d.msg);
+  const c = d.check || {};
+  alert(`appiontCheck: ${c.success ? '✅ 可预约前置校验通过' : '❌ ' + (c.msg || '不可预约')}\nvcode 接口: ✅ 正常,验证码图片已显示在下方`);
+  if (d.captcha) {
+    $('captchaImg').src = d.captcha;
+    $('captchaArea').style.display = 'flex';
+    $('captchaInput').disabled = true;
+    $('btnSubmitCap').disabled = true;
+  }
+};
+
+async function submitCap() {
+  const code = $('captchaInput').value.trim();
+  if (!code) return;
+  $('captchaInput').value = '';
+  await fetch('/api/task/captcha', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code}),
+  });
+}
+$('btnSubmitCap').onclick = submitCap;
+$('captchaInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitCap(); });
+
+const stateText = {
+  waiting: '⏳ 等待开始时间', running: '🔥 抢座中', done: '✅ 成功结束',
+  failed: '❌ 失败/停止', none: '无任务',
+};
+
+async function pollTask() {
+  const d = await (await fetch('/api/task/status')).json();
+  if (d.state === 'none') return;
+  $('taskState').textContent = stateText[d.state] || d.state
+    + (d.state === 'waiting' && d.remaining > 0 ? `(剩 ${d.remaining}s)` : '');
+  $('taskAtt').textContent = d.attempts;
+  if (d.log) $('log').textContent = d.log.join('\n');
+  if (d.awaiting_input) {
+    $('captchaArea').style.display = 'flex';
+    $('captchaInput').disabled = false;
+    $('btnSubmitCap').disabled = false;
+    if (d.captcha) $('captchaImg').src = d.captcha;
+    $('captchaInput').focus();
+  } else {
+    $('captchaInput').disabled = true;
+    $('btnSubmitCap').disabled = true;
+    if (d.state !== 'running') $('captchaArea').style.display = 'none';
+    else if (d.captcha) { $('captchaImg').src = d.captcha; $('captchaArea').style.display = 'flex'; }
+  }
+  const res = $('taskResult');
+  if (d.result) {
+    res.innerHTML = d.result.success
+      ? `<div class="result-ok">🎉 ${d.result.msg}</div>`
+      : `<div class="result-err">😢 ${d.result.msg}</div>`;
+  } else res.innerHTML = '';
+}
+
+// ---------- 轮询主循环 ----------
+setInterval(pollLogin, 1000);
+setInterval(() => { if ($('autoRefresh').checked) refreshLectures(); }, 2000);
+setInterval(() => { if (Date.now() % 5000 < 800) refreshLectures(); }, 1000); // 未开自动刷新时,每5s静默刷一次
+setInterval(pollTask, 600);
+setInterval(syncTime, 60000);
+pollLogin();
+refreshLectures();
+</script>
+</body>
+</html>
